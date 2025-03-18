@@ -80,8 +80,11 @@ class ArduPilotPlugin:
 
         self.sensor_rate = sensor_rate
         self.comm_rate = self.AP_COMM_FREQUENCY
-        self.steps = round(self.sensor_rate / self.comm_rate)
-        self.step = 0
+        
+        # self.steps = round(self.sensor_rate / self.comm_rate)
+        # self.step = 0
+
+        self.steps = 0
 
         # Placeholder for previous and current sensor data dictionary
         self.prev_sensor_data = None
@@ -318,6 +321,9 @@ class ArduPilotPlugin:
         self.curr_sensor_data = sensor_data
         self.last_controller_update_time = self.sim_time
         self.time_since_last_update = 0.0  # Reset time since last update when new data arrives
+        
+        self.steps += 1
+
 
     def send_state_interpolated(self, sensor_rate: float = 1/60, comm_rate: float = 1/800):
         steps = round(sensor_rate / comm_rate)
@@ -330,7 +336,8 @@ class ArduPilotPlugin:
 
 
     def post_update(self):
-        if self.sim_time > self.last_controller_update_time and self.arduPilotOnline:
+        # if self.sim_time > self.last_controller_update_time and self.arduPilotOnline:
+        if self.arduPilotOnline:
             self.create_state_json(sim_time=self.last_controller_update_time, sensor_data=self.curr_sensor_data)
             self.send_state()
 
@@ -372,38 +379,89 @@ class ArduPilotPlugin:
         return interpolated_data
     
 
+    # def run_plugin(self, interpolated=True):
+    #     self.init_sockets()
+    #     self.drain_unread_packets()
+
+    #     self.ap_thread_running = True
+
+    #     while self.ap_thread_running:
+    #         self.pre_update()
+
+    #         curr_step = self.steps
+
+    #         messages_count = 0
+    #         time_start = time.time()
+    #         while curr_step == self.steps:
+    #             messages_count += 1
+    #             self.post_update()
+            
+    #         dt = time.time() - time_start
+    #         print(f"send {messages_count} in {dt} seconds")
+
     def run_plugin(self, interpolated=True):
         self.init_sockets()
         self.drain_unread_packets()
 
         self.ap_thread_running = True
-        
-        messages = 0
-        start_dt = self.sim_time
+        target_hz = 1000  # Target frequency in Hz
+        target_interval = 1 / target_hz  # Time to wait between messages in seconds
+
         while self.ap_thread_running:
             self.pre_update()
-            
-            if interpolated:
-                if self.step < self.steps:
-                    self.step += 1
-                else:
-                    self.step = 0 
-                
-                print(f"self.step:{self.step}")
-                self.curr_sensor_data = self.interpolate_sensor_data(self.step)
-                pprint(f"{self.curr_sensor_data}")
-            
-            self.post_update()
 
-            time.sleep(self.comm_rate)
+            curr_step = self.steps
+            messages_count = 0
+            time_start = time.time()
+
+            while curr_step == self.steps:
+                messages_count += 1
+                self.post_update()
+
+                # Calculate the time taken for the current message
+                elapsed_time = time.time() - time_start
+
+                # time.sleep(0.0007) ########### Golden sleep 1000HZ ~ 16.66 messages per 1/60 seconds
+                # time.sleep(0.015) ########### Golden sleep 1000HZ ~ 16.66 messages per 1/60 seconds
+
+
+                # sleep_time = messages_count * target_interval - elapsed_time
+
+                # # If the sleep time is positive, sleep to maintain the target frequency
+                # if sleep_time > 0:
+                #     pass
+
+            dt = time.time() - time_start
+            print(f"Curr Step: {curr_step}, Sent {messages_count} messages in {dt:.4f} seconds")
+
+        # messages = 0
+        # start_dt = self.sim_time
+        # while self.ap_thread_running:
+        #     self.pre_update()
+
             
-            messages += 1
-            dt = self.sim_time - start_dt
-            # print(f"self.sim_time: {self.sim_time}, start_dt:{start_dt}, dt:{dt}")
-            if dt >= 1.0:
-                print(f"send {messages} in {dt} seconds")
-                start_dt = self.sim_time
-                messages = 0
+            
+        #     if interpolated:
+        #         if self.step < self.steps:
+        #             self.step += 1
+        #         else:
+        #             self.step = 0 
+                
+        #         print(f"self.step:{self.step}")
+        #         self.curr_sensor_data = self.interpolate_sensor_data(self.step)
+        #         pprint(f"{self.curr_sensor_data}")
+            
+        #     self.post_update()
+
+        #     time.sleep(self.comm_rate)
+            
+        #     messages += 1
+        #     dt = self.sim_time - start_dt
+        #     # print(f"self.sim_time: {self.sim_time}, start_dt:{start_dt}, dt:{dt}")
+        #     if dt >= 1.0:
+        #         print(f"send {messages} in {dt} seconds")
+        #         start_dt = self.sim_time
+        #         messages = 0
             
     def start(self):
         print("Ardupilot Plugin Started")

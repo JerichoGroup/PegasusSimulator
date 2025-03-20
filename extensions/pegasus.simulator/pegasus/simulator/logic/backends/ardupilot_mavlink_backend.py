@@ -562,7 +562,11 @@ class ArduPilotMavlinkBackend(Backend):
         if self.ardupilot_autolaunch and self.ardupilot_tool is None:
             carb.log_info("Attempting to launch ArduPilot in background process")
             self.ardupilot_tool = ArduPilotLaunchTool(self.ardupilot_dir, self._vehicle_id, self.ardupilot_vehicle_model)
-            self.ardupilot_tool.launch_ardupilot()
+            try:
+                self.ardupilot_tool.launch_ardupilot()
+            except FileNotFoundError:
+                carb.log_error(f"Could not find sim_vehicle.py in this path: {self.ardupilot_dir + '/Tools/autotest/sim_vehicle.py'}")
+
 
         self.ardupilot_comm_thread.start()
 

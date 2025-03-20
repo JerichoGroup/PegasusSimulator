@@ -61,6 +61,10 @@ class ArduPilotLaunchTool:
         Method that will launch a ardupilot instance with the specified configuration
         """
         # sim_vehicle.py -v ArduCopter -f gazebo-iris --mode JSON --console --map
+        if not os.path.isfile(self.ardupilot_dir + "/Tools/autotest/sim_vehicle.py"):
+            print(f"Could not find sim_vehicle.py in this path: {self.ardupilot_dir + '/Tools/autotest/sim_vehicle.py'}")
+            raise FileNotFoundError
+
         command = [
             self.ardupilot_dir + "/Tools/autotest/sim_vehicle.py",
             "-v", "ArduCopter",

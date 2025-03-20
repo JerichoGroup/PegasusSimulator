@@ -9,6 +9,8 @@ __all__ = ["ArduPilotMavlinkBackend", "ArduPilotMavlinkBackendConfig"]
 import carb
 import time
 import math
+import threading
+from pprint import pprint
 import numpy as np
 from pymavlink import mavutil
 import pymavlink.dialects.v20.all as dialect
@@ -345,6 +347,9 @@ class ArduPilotMavlinkBackend(Backend):
         self.ap = ArduPilotPlugin()
         self.ap.drain_unread_packets()
 
+        self.ardupilot_comm_dt = 1.0/1000.0
+        self.ardupilot_comm_thread = threading.Thread(target=self.ardupilot_comm_thread_loop, args=())
+
     def update_sensor(self, sensor_type: str, data):
         """Method that is used as callback for the vehicle for every iteration that a sensor produces new data. 
         Only the IMU, GPS, Barometer and  Magnetometer sensor data are stored to be sent through mavlink. Every other 
@@ -559,6 +564,8 @@ class ArduPilotMavlinkBackend(Backend):
             self.ardupilot_tool = ArduPilotLaunchTool(self.ardupilot_dir, self._vehicle_id, self.ardupilot_vehicle_model)
             self.ardupilot_tool.launch_ardupilot()
 
+        self.ardupilot_comm_thread.start()
+
     def stop(self):
         """Method that when called will handle the stopping of the simulation of vehicle. It will make sure that any open
         mavlink connection will be closed and also that the ArduPilot background process gets killed (if it was auto-initialized)
@@ -574,6 +581,8 @@ class ArduPilotMavlinkBackend(Backend):
         # Close the mavlink connection
         self._connection.close()
         self._connection = None
+
+        self.ardupilot_comm_thread.join()
 
         # Close the ArduPilot if it was running
         if self.ardupilot_autolaunch and self.ardupilot_autolaunch is not None:
@@ -620,6 +629,41 @@ class ArduPilotMavlinkBackend(Backend):
             self._received_first_hearbeat = True
             carb.log_warn("Received first hearbeat")
 
+
+    def ardupilot_comm_thread_loop(self): 
+        dt = self.ardupilot_comm_dt  # Set the desired interval of 1/1000 seconds (1ms)
+
+        current_time = 0
+
+        while self._is_running:
+            # Increment current_time by dt every iteration
+            current_time += dt
+
+            if current_time >= dt:  # If enough time has passed
+                carb.log_info("Pre Update")
+
+                _, servos = self.ap.pre_update(
+                    sim_time=current_time
+                )
+
+                carb.log_info("Checking is Armed")
+                self.update_is_armed()
+                carb.log_info("Update Motor Commands")  
+                self.update_motor_commands(servos)
+
+                # pprint(f"timestamp: {current_time}")
+                # pprint(self._sensor_data)
+
+                carb.log_info("Post Update")
+                self.ap.post_update(
+                    sim_time=current_time,
+                    sensor_data=self._sensor_data
+                )
+
+            time.sleep(dt)  # Sleep for the remainder of the time to control the loop rate
+
+
+
     def update(self, dt):
         """
         Method that is called at every physics step to send data to ArduPilot and receive the control inputs via mavlink
@@ -630,22 +674,22 @@ class ArduPilotMavlinkBackend(Backend):
 
         self._current_utime += dt
 
-        carb.log_info("Pre Update")
+        # carb.log_info("Pre Update")
 
-        _, servos =self.ap.pre_update(
-            sim_time=self._current_utime
-        )
+        # _, servos =self.ap.pre_update(
+        #     sim_time=self._current_utime
+        # )
 
-        carb.log_info("Checking is Armed")
-        self.update_is_armed()
-        carb.log_info("Update Motor Commands")  
-        self.update_motor_commands(servos)
+        # carb.log_info("Checking is Armed")
+        # self.update_is_armed()
+        # carb.log_info("Update Motor Commands")  
+        # self.update_motor_commands(servos)
     
-        carb.log_info("Post Update")
-        self.ap.post_update(
-            sim_time=self._current_utime,
-            sensor_data=self._sensor_data
-        )
+        # carb.log_info("Post Update")
+        # self.ap.post_update(
+        #     sim_time=self._current_utime,
+        #     sensor_data=self._sensor_data
+        # )
 
     def update_is_armed(self):
         # Use this loop to emulate a do-while loop (make sure this runs at least once)

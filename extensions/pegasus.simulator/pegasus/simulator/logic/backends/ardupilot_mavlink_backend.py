@@ -644,6 +644,7 @@ class ArduPilotMavlinkBackend(Backend):
             current_time += dt
 
             if current_time >= dt:  # If enough time has passed
+                start_time = time.time()
                 carb.log_info("Pre Update")
 
                 _, servos = self.ap.pre_update(
@@ -663,8 +664,10 @@ class ArduPilotMavlinkBackend(Backend):
                     sim_time=current_time,
                     sensor_data=self._sensor_data
                 )
-
-            time.sleep(dt)  # Sleep for the remainder of the time to control the loop rate
+            
+            op_time = time.time() - start_time
+            sleep_time = dt if (dt - op_time) < 0 else (dt - op_time)
+            time.sleep(sleep_time)  # Sleep for the remainder of the time to control the loop rate
 
 
 

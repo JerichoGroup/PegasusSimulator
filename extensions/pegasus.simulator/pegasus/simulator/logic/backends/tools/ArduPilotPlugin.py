@@ -286,13 +286,3 @@ if __name__ == '__main__':
         ap.pre_update()
         ap.post_update(sensor_data=ap.SensorData())
         time.sleep(0.01)
-
-        
-
-
-
-
-
-
-
-
